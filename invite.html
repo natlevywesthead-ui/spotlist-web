@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Spotlist invite</title>
+<meta name="description" content="You've been invited to Spotlist, a shared map of the places your friends love.">
+<style>
+  :root {
+    --paper: #EEF0EA; --card: #FAFBF7; --ink: #18261F; --soft: #5F6C64; --line: #D3D8CF; --accent: #2E5E4E; --eat: #8E2C3A;
+    --serif: "New York", "Iowan Old Style", Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --paper: #111915; --card: #1A231E; --ink: #E6EBE4; --soft: #9AA89F; --line: #2C3832; --accent: #8CC2AE; --eat: #D88A95; }
+  }
+  :root[data-theme="dark"] { --paper: #111915; --card: #1A231E; --ink: #E6EBE4; --soft: #9AA89F; --line: #2C3832; --accent: #8CC2AE; --eat: #D88A95; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 48px 16px 64px; }
+  .kicker { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--soft); margin: 0 0 6px; }
+  h1 { font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 38px; line-height: 1.15; margin: 0; }
+  .lead { color: var(--soft); margin: 12px 0 32px; }
+  ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: step; }
+  li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; counter-increment: step; }
+  li::before { content: counter(step); display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  li p { margin: 0 0 12px; color: var(--soft); font-size: 15px; }
+  li h2 { font-size: 17px; margin: 0 0 4px; }
+  a.button { display: block; text-align: center; font-weight: 600; color: var(--paper); background: var(--ink); text-decoration: none; border-radius: 6px; padding: 12px 16px; }
+  .code { margin-top: 24px; color: var(--soft); font-size: 14px; text-align: center; }
+  .code b { font-family: ui-monospace, Menlo, monospace; color: var(--ink); letter-spacing: .04em; }
+  .error { color: var(--eat); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Spotlist</p>
+  <h1 id="title">You're invited</h1>
+  <p class="lead" id="lead">Spotlist is a shared map of the places your friends love: restaurants, bars, coffee, everything worth going back to.</p>
+  <ol>
+    <li>
+      <h2>Get the app</h2>
+      <p>Spotlist is in beta on TestFlight. Install TestFlight if asked, then Spotlist.</p>
+      <a class="button" href="https://testflight.apple.com/join/1xE3dRmV">Get Spotlist</a>
+    </li>
+    <li>
+      <h2>Open your invite</h2>
+      <p id="step2">Once Spotlist is installed, come back here and tap below. You'll follow each other straight away.</p>
+      <a class="button" id="open" href="#">Open in Spotlist</a>
+    </li>
+  </ol>
+  <p class="code" id="code" hidden></p>
+</main>
+<script>
+const BASE = "https://pzlbltiicrkfnhbknzos.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6bGJsdGlpY3JrZm5oYmtuem9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzMzIxOTIsImV4cCI6MjEwNjkwODE5Mn0.NVPOD0UFzn8f5lAqmpGHINqMsT4ZLrk3Rk4_4U5fyzE";
+// The code rides in the fragment, which never leaves the browser.
+const code = (location.hash.slice(1) || new URLSearchParams(location.search).get("c") || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+const $ = (id) => document.getElementById(id);
+
+if (code.length !== 12) {
+  $("title").textContent = "This invite link is incomplete";
+  $("lead").innerHTML = '<span class="error">Ask whoever sent it for a new one, or find them in Spotlist by their @handle.</span>';
+  $("open").hidden = true;
+} else {
+  $("open").href = "spotlist://invite/" + code;
+  $("code").hidden = false;
+  $("code").innerHTML = "Or enter code <b>" + code.match(/.{4}/g).join("-") + "</b> in Spotlist under Friends.";
+  fetch(BASE + "/rest/v1/rpc/invite_preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: ANON, Authorization: "Bearer " + ANON },
+    body: JSON.stringify({ p_code: code }),
+  }).then((r) => r.ok ? r.json() : []).then((rows) => {
+    const who = rows[0];
+    if (!who) return;
+    const name = who.display_name || "@" + who.handle;
+    $("title").textContent = name + " invited you to Spotlist";
+    document.title = name + " invited you to Spotlist";
+    if (!who.valid) {
+      $("step2").innerHTML = '<span class="error">This invite has been used or has expired.</span> Once you have the app, find <b>@' + who.handle + "</b> under Friends.";
+      $("open").hidden = true;
+      $("code").hidden = true;
+    }
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>
